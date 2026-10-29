@@ -1,0 +1,42 @@
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    container_name: driveguard-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mqtt-broker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+
+  database:
+    image: mariadb:12.3.2
+    container_name: driveguard-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-driveguard_db}
+      MARIADB_USER: ${MARIADB_USER:-driveguard_app}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}
+    ports:
+      - "3308:3306"
+    volumes:
+      - driveguard_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD
+        - healthcheck.sh
+        - --connect
+        - --innodb_initialized
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mqtt_data:
+    name: mqtt-broker_mqtt_data
+  driveguard_mariadb_data:
+    name: driveguard_mariadb_data
