@@ -106,7 +106,30 @@ import {
     return 'normal'
   }
 
-function App() {
+function App({ user, onLogout }) {
+
+  
+  const roleNames = {
+    ADMIN: 'Quản trị viên',
+    VIEWER: 'Người xem',
+    HR: 'Nhân sự',
+    EMPLOYEE: 'Nhân viên',
+    TECH_LEAD: 'Trưởng nhóm kỹ thuật',
+  }
+
+  const role = String(user?.role || 'UNKNOWN').toUpperCase()
+  const roleLabel = roleNames[role] || role
+
+  const username =
+    user?.fullName ||
+    user?.fullname ||
+    user?.username ||
+    user?.email ||
+    role
+
+  const avatarText = username.trim().charAt(0).toUpperCase() || 'U'
+
+
   const [scenario, setScenario] = useState('normal')
 
   const [sensorReading, setSensorReading] = useState(() =>
@@ -461,14 +484,49 @@ function App() {
           </div>
 
 
+
           <div className="topbar-right">
             <span className="demo-badge">
-              {dataSource === 'MQTT'
-                ? '● MQTT TEST'
-                : '● DEMO MODE'}
+              {dataSource === 'MQTT' ? '● MQTT TEST' : '● DEMO MODE'}
             </span>
-            <div className="avatar">DG</div>
+
+            <div className="account-info">
+              <div className="account-avatar">{avatarText}</div>
+
+              <div className="account-details">
+                <strong className="account-name" title={username}>
+                  {username}
+                </strong>
+                <span className="account-role">{roleLabel}</span>
+              </div>
+
+              <button
+                type="button"
+                className="logout-button"
+                onClick={onLogout}
+                title="Đăng xuất khỏi hệ thống"
+                aria-label="Đăng xuất khỏi hệ thống"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M10 17l5-5-5-5" />
+                  <path d="M15 12H3" />
+                  <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
+                </svg>
+                <span>Đăng xuất</span>
+              </button>
+            </div>
           </div>
+
 
         </header>
 

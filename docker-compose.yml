@@ -35,8 +35,11 @@ services:
       retries: 10
       start_period: 30s
 
+
 volumes:
   mqtt_data:
+    external: true
     name: mqtt-broker_mqtt_data
+
   driveguard_mariadb_data:
     name: driveguard_mariadb_data

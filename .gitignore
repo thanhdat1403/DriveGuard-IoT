@@ -1,31 +1,84 @@
 
+# ============================================
+# DRIVEGUARD IoT - GITIGNORE
+# ============================================
+
 # Environment variables and secrets
 .env
 .env.*
 !.env.example
 
-# Node.js dependencies
-**/node_modules/
+# Secret files
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+secrets/
 
-# Build output
+# Database backups and local data
+backups/
+*.sql.gz
+*.dump
+
+# Node.js / React
+**/node_modules/
 **/dist/
+**/coverage/
+.npm/
+.cache/
+
+# Java / Spring Boot / Gradle
+**/.gradle/
 **/build/
+**/out/
+**/target/
+*.class
+
+# Keep Gradle Wrapper files
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+**/.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code local settings
+.vscode/
+**/.vscode/
+
+# Postman local workspace
+**/.postman/
+
+# Python / AI service
+**/__pycache__/
+*.py[cod]
+**/.venv/
+**/venv/
+.pytest_cache/
+
+# AI models and training outputs
+*.pt
+*.pth
+*.onnx
+*.h5
+*.keras
+runs/
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
-
-# Test coverage
-**/coverage/
-
-# IDE and operating system
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+logs/
 
 # Temporary files
 *.tmp
 *.bak
+*.swp
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
