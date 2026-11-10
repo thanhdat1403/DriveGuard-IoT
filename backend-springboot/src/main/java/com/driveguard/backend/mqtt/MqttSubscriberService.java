@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.springframework.stereotype.Service;
-
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -31,6 +31,12 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@ConditionalOnProperty(
+        prefix = "driveguard.mqtt",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 @RequiredArgsConstructor
 public class MqttSubscriberService {
 

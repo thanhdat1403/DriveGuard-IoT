@@ -55,29 +55,36 @@ public class DeviceEventServiceImpl implements DeviceEventService {
                 ? null
                 : message.getSosEpisodeId().trim();
 
-        // 2. CHỐNG TRÙNG LẶP: Tìm xem sự kiện với ID này đã từng được lưu chưa
-        DeviceEventEntity existing = deviceEventRepository
-                .findByEventId(eventId)
-                .orElse(null);
-
-        // Nếu đã tồn tại sự kiện trong DB -> Bỏ qua không lưu mới, trả về ngay sự kiện cũ
-        if (existing != null) {
-            log.info(
-                    "[DEVICE-EVENT] Duplicate event ignored: {}",
-                    eventId
-            );
-            return existing;
-        }
-
-        // 3. Tìm thông tin thiết bị trong DB thông qua mã Thiết bị (deviceCode) gửi lên
-        // Nếu không tìm thấy thiết bị này trong hệ thống -> Bắn lỗi chặn xử lý tiếp
+        // 2. Tìm thiết bị theo mã gửi từ ESP32-S3.
+        // Lấy khóa ghi ngay từ truy vấn đầu tiên.
+        //
+        // Không thực hiện SELECT thông thường trước khi khóa,
+        // tránh tạo snapshot cũ trong transaction REPEATABLE READ.
         DeviceEntity device = deviceRepository
-                .findByDeviceCode(deviceCode)
+                .findByDeviceCodeForUpdate(deviceCode)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "Device not found: " + deviceCode
                         )
                 );
+
+        // 4. Kiểm tra trùng eventId SAU KHI lấy khóa.
+        //
+        // Điều này tránh hai transaction của cùng thiết bị
+        // cùng vượt qua bước kiểm tra trùng trước khi lưu.
+        DeviceEventEntity existing = deviceEventRepository
+                .findByEventId(eventId)
+                .orElse(null);
+
+        if (existing != null) {
+
+            log.info(
+                    "[DEVICE-EVENT] Duplicate event ignored | eventId={}",
+                    eventId
+            );
+
+            return existing;
+        }
 
         // 4. Khởi tạo đối tượng thực thể (Entity) mới để chuẩn bị lưu vào cơ sở dữ liệu
         DeviceEventEntity event = new DeviceEventEntity();

@@ -13,12 +13,25 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
+
 @Entity
-@Table(name = "alerts")
+@Table(
+        name = "alerts",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_alerts_device_sos_episode",
+                        columnNames = {
+                                "device_id",
+                                "sos_episode_id"
+                        }
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
 public class AlertEntity {
+
 
     // ==================== ID ====================
 

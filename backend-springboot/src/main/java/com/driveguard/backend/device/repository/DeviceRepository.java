@@ -31,4 +31,14 @@ public interface DeviceRepository
     Optional<DeviceEntity> findByIdForUpdate(
             @Param("deviceId") Long deviceId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT d
+        FROM DeviceEntity d
+        WHERE d.deviceCode = :deviceCode
+        """)
+    Optional<DeviceEntity> findByDeviceCodeForUpdate(
+            @Param("deviceCode") String deviceCode
+    );
 }

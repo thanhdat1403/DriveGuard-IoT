@@ -8,6 +8,7 @@ import com.driveguard.backend.deviceevent.dto.mqtt.DeviceEventMessage;
 import com.driveguard.backend.deviceevent.entity.DeviceEventEntity;
 import com.driveguard.backend.deviceevent.repository.DeviceEventRepository;
 import com.driveguard.backend.deviceevent.service.Impl.DeviceEventServiceImpl;
+import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -81,8 +82,10 @@ class DeviceEventServiceImplTest {
                 deviceId
         );
 
-        when(deviceRepository.findByDeviceCode(deviceCode))
+        when(deviceRepository.findByDeviceCodeForUpdate(deviceCode))
                 .thenReturn(Optional.of(device));
+
+
 
         // 4. Giả lập Repository lưu sự kiện thành công
         when(deviceEventRepository.save(any(DeviceEventEntity.class)))
@@ -191,6 +194,23 @@ class DeviceEventServiceImplTest {
         when(deviceEventRepository.findByEventId(eventId))
                 .thenReturn(Optional.of(existingEvent));
 
+        // Giả lập thiết bị hợp lệ
+        Long deviceId = 1L;
+
+        DeviceEntity device = new DeviceEntity();
+
+        ReflectionTestUtils.setField(
+                device,
+                "id",
+                deviceId
+        );
+
+        when(deviceRepository.findByDeviceCodeForUpdate(deviceCode))
+                .thenReturn(Optional.of(device));
+
+
+
+
         // 3. ACT: Gửi lại sự kiện có cùng eventId
         DeviceEventEntity result =
                 deviceEventService.saveEvent(
@@ -207,14 +227,27 @@ class DeviceEventServiceImplTest {
         verify(deviceEventRepository, never())
                 .save(any(DeviceEventEntity.class));
 
-        // Không cần truy vấn lại thiết bị
-        verifyNoInteractions(deviceRepository);
+        // Phải tìm và khóa thiết bị trước khi kiểm tra trùng eventId
+        verify(deviceRepository, times(1))
+                .findByDeviceCodeForUpdate(deviceCode);
 
         // Không được tạo hoặc cập nhật Alert lần thứ hai
         verifyNoInteractions(alertService);
 
         // Chỉ kiểm tra sự kiện trùng đúng một lần
         verify(deviceEventRepository, times(1))
+                .findByEventId(eventId);
+
+        // Xác minh thứ tự: tìm thiết bị -> khóa thiết bị -> kiểm tra trùng
+        InOrder inOrder = inOrder(
+                deviceRepository,
+                deviceEventRepository
+        );
+
+        inOrder.verify(deviceRepository)
+                .findByDeviceCodeForUpdate(deviceCode);
+
+        inOrder.verify(deviceEventRepository)
                 .findByEventId(eventId);
     }
 
@@ -263,8 +296,10 @@ class DeviceEventServiceImplTest {
                 deviceId
         );
 
-        when(deviceRepository.findByDeviceCode(deviceCode))
+        when(deviceRepository.findByDeviceCodeForUpdate(deviceCode))
                 .thenReturn(Optional.of(device));
+
+
 
         // 4. Giả lập lưu START thành công
         when(deviceEventRepository.save(any(DeviceEventEntity.class)))
@@ -365,8 +400,10 @@ class DeviceEventServiceImplTest {
                 deviceId
         );
 
-        when(deviceRepository.findByDeviceCode(deviceCode))
+        when(deviceRepository.findByDeviceCodeForUpdate(deviceCode))
                 .thenReturn(Optional.of(device));
+
+
 
         // 4. Giả lập lưu ACK thành công
         when(deviceEventRepository.save(any(DeviceEventEntity.class)))

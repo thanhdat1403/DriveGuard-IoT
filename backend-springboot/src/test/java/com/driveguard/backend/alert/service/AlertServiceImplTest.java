@@ -163,14 +163,18 @@ class AlertServiceImplTest {
         );
     }
 
+
     @Test
     void acknowledgeSos_shouldNotReopenEndedEpisode() {
-
         alert.setEpisodeStatus(AlertEpisodeStatus.ENDED);
+        alert.setStatus(AlertStatus.NEW);
 
         when(alertRepository.findByDeviceIdAndSosEpisodeId(
                 1L, "sos-test-001"
         )).thenReturn(Optional.of(alert));
+
+        when(alertRepository.save(any(AlertEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         Optional<AlertEntity> result =
                 alertService.acknowledgeSosAlert(
@@ -178,14 +182,23 @@ class AlertServiceImplTest {
                 );
 
         assertTrue(result.isPresent());
+
+        // ACK không được mở lại episode đã kết thúc.
         assertEquals(
                 AlertEpisodeStatus.ENDED,
                 result.get().getEpisodeStatus()
         );
 
-        verify(alertRepository, never())
+        // Nhưng ACK vẫn phải được ghi nhận.
+        assertEquals(
+                AlertStatus.ACKNOWLEDGED,
+                result.get().getStatus()
+        );
+
+        verify(alertRepository, times(1))
                 .save(any(AlertEntity.class));
     }
+
 
     @Test
     void createSosAlert_shouldRejectBlankEpisodeId() {
@@ -359,6 +372,180 @@ class AlertServiceImplTest {
         assertNull(result.get().getEndedAt());
 
         verify(alertRepository, times(1))
+                .save(any(AlertEntity.class));
+    }
+
+
+    @Test
+    void createSosAlert_shouldRestoreAckArrivingBeforeStart() {
+        Long deviceId = 1L;
+        String episodeId = "sos-ack-before-start-v9";
+
+        when(alertRepository.findByDeviceIdAndSosEpisodeId(
+                deviceId, episodeId
+        )).thenReturn(Optional.empty());
+
+        when(deviceEventRepository
+                .existsByDeviceIdAndSosEpisodeIdAndEventType(
+                        deviceId,
+                        episodeId,
+                        "SOS_ACKNOWLEDGED"
+                )).thenReturn(true);
+
+        when(alertRepository.save(any(AlertEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AlertEntity result = alertService.createSosAlertIfAbsent(
+                deviceId,
+                episodeId,
+                "MANUAL_SOS",
+                startedAt
+        );
+
+        assertEquals(
+                AlertEpisodeStatus.ACTIVE,
+                result.getEpisodeStatus()
+        );
+
+        assertEquals(
+                AlertStatus.ACKNOWLEDGED,
+                result.getStatus()
+        );
+
+        assertNull(result.getAcknowledgedBy());
+        assertNull(result.getAcknowledgedAt());
+
+        verify(alertRepository, times(1))
+                .save(any(AlertEntity.class));
+    }
+
+    @Test
+    void createSosAlert_shouldRestoreEndAndAckBeforeStart() {
+        Long deviceId = 1L;
+        String episodeId = "sos-end-ack-start-v9";
+
+        when(alertRepository.findByDeviceIdAndSosEpisodeId(
+                deviceId, episodeId
+        )).thenReturn(Optional.empty());
+
+        DeviceEventEntity endEvent = new DeviceEventEntity();
+        endEvent.setDeviceId(deviceId);
+        endEvent.setSosEpisodeId(episodeId);
+        endEvent.setEventType("SOS_ENDED");
+        endEvent.setReceivedAt(startedAt.minusSeconds(5));
+
+        when(deviceEventRepository
+                .findFirstByDeviceIdAndSosEpisodeIdAndEventTypeOrderByReceivedAtAscIdAsc(
+                        deviceId,
+                        episodeId,
+                        "SOS_ENDED"
+                )).thenReturn(Optional.of(endEvent));
+
+        when(deviceEventRepository
+                .existsByDeviceIdAndSosEpisodeIdAndEventType(
+                        deviceId,
+                        episodeId,
+                        "SOS_ACKNOWLEDGED"
+                )).thenReturn(true);
+
+        when(alertRepository.save(any(AlertEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AlertEntity result = alertService.createSosAlertIfAbsent(
+                deviceId,
+                episodeId,
+                "MANUAL_SOS",
+                startedAt
+        );
+
+        assertEquals(
+                AlertEpisodeStatus.ENDED,
+                result.getEpisodeStatus()
+        );
+
+        assertEquals(
+                AlertStatus.ACKNOWLEDGED,
+                result.getStatus()
+        );
+
+        assertNull(result.getEndedAt());
+        assertNull(result.getAcknowledgedBy());
+        assertNull(result.getAcknowledgedAt());
+
+        verify(alertRepository, times(1))
+                .save(any(AlertEntity.class));
+    }
+
+
+    @Test
+    void acknowledgeSos_shouldRecordAckAfterEpisodeEnded() {
+        // ARRANGE
+        alert.setEpisodeStatus(AlertEpisodeStatus.ENDED);
+        alert.setStatus(AlertStatus.NEW);
+        alert.setEndedAt(startedAt.plusMinutes(5));
+
+        when(alertRepository.findByDeviceIdAndSosEpisodeId(
+                1L, "sos-test-001"
+        )).thenReturn(Optional.of(alert));
+
+        when(alertRepository.save(any(AlertEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // ACT
+        Optional<AlertEntity> result =
+                alertService.acknowledgeSosAlert(
+                        1L, "sos-test-001"
+                );
+
+        // ASSERT
+        assertTrue(result.isPresent());
+        assertEquals(
+                AlertEpisodeStatus.ENDED,
+                result.get().getEpisodeStatus()
+        );
+        assertEquals(
+                AlertStatus.ACKNOWLEDGED,
+                result.get().getStatus()
+        );
+        assertEquals(
+                startedAt.plusMinutes(5),
+                result.get().getEndedAt()
+        );
+        assertNull(result.get().getAcknowledgedBy());
+        assertNull(result.get().getAcknowledgedAt());
+
+        verify(alertRepository, times(1))
+                .save(any(AlertEntity.class));
+    }
+
+    @Test
+    void acknowledgeSos_shouldNotSaveAgainWhenAlreadyAcknowledged() {
+        // ARRANGE
+        alert.setEpisodeStatus(AlertEpisodeStatus.ENDED);
+        alert.setStatus(AlertStatus.ACKNOWLEDGED);
+
+        when(alertRepository.findByDeviceIdAndSosEpisodeId(
+                1L, "sos-test-001"
+        )).thenReturn(Optional.of(alert));
+
+        // ACT
+        Optional<AlertEntity> result =
+                alertService.acknowledgeSosAlert(
+                        1L, "sos-test-001"
+                );
+
+        // ASSERT
+        assertTrue(result.isPresent());
+        assertEquals(
+                AlertEpisodeStatus.ENDED,
+                result.get().getEpisodeStatus()
+        );
+        assertEquals(
+                AlertStatus.ACKNOWLEDGED,
+                result.get().getStatus()
+        );
+
+        verify(alertRepository, never())
                 .save(any(AlertEntity.class));
     }
 

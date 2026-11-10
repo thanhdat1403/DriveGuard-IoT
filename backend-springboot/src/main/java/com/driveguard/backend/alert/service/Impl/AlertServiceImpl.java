@@ -294,6 +294,15 @@ public class AlertServiceImpl implements AlertService {
 
         boolean hasEndEvent = endEvent.isPresent();
 
+
+        boolean hasAckEvent = deviceEventRepository
+                .existsByDeviceIdAndSosEpisodeIdAndEventType(
+                        deviceId,
+                        sosEpisodeId,
+                        "SOS_ACKNOWLEDGED"
+                );
+
+
         if (hasEndEvent) {
             log.warn(
                     "[SOS] START arrived after SOS_ENDED | " +
@@ -310,7 +319,13 @@ public class AlertServiceImpl implements AlertService {
         alert.setSosEpisodeId(sosEpisodeId); // Gắn mã đợt khẩn cấp phục vụ cho việc đối chiếu sau này
         alert.setAlertType(eventType);
         alert.setSeverity(AlertSeverity.CRITICAL);  // Mức độ nghiêm trọng: Nguy hiểm/ Nguy kịch
-        alert.setStatus(AlertStatus.NEW);
+
+        alert.setStatus(
+                hasAckEvent
+                        ? AlertStatus.ACKNOWLEDGED
+                        : AlertStatus.NEW
+        );
+
 
         alert.setEpisodeStatus(
                 hasEndEvent
@@ -392,14 +407,6 @@ public class AlertServiceImpl implements AlertService {
         // Nếu tìm thấy, lấy đối tượng thực thể cảnh báo ra để xử lý
         AlertEntity alert = existing.get();
 
-        // 3. Nếu đợt cảnh báo SOS này đã kết thúc (ENDED) -> Bỏ qua không cập nhật và trả về dữ liệu hiện tại
-        if (alert.getEpisodeStatus() == AlertEpisodeStatus.ENDED){
-            log.info(
-                    "[SOS] Ignored acknowledgement for ENDED episode | alertId={}",
-                    alert.getId()
-            );
-            return Optional.of(alert);
-        }
 
         // 4. Nếu cảnh báo đang ở trạng thái mới tạo (NEW) -> Tiến hành cập nhật trạng thái xác nhận
         if (alert.getStatus() == AlertStatus.NEW){
