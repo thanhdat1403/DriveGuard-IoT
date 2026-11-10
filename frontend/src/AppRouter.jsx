@@ -7,66 +7,112 @@ import { getCurrentUser } from './services/api/authApi.js'
 const TOKEN_KEY = 'driveguard_access_token'
 const USER_KEY = 'driveguard_user'
 
+function normalizeRole(role) {
+  return String(role ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^ROLE_/, '')
+}
+
+function AccessDenied({ user, onLogout }) {
+  return (
+    <main
+      style={{
+        minHeight: '100vh',
+        background: '#0b1220',
+        color: '#e5e7eb',
+        display: 'grid',
+        placeItems: 'center',
+        padding: 24,
+      }}
+    >
+      <section
+        style={{
+          maxWidth: 520,
+          padding: 32,
+          background: '#131e30',
+          border: '1px solid #293a52',
+          borderRadius: 16,
+        }}
+      >
+        <h1>DriveGuard | Chưa được cấp quyền</h1>
+        <p>
+          Tài khoản: {user?.fullName || user?.username}
+        </p>
+        <p>
+          Vai trò: {normalizeRole(user?.role) || 'Chưa xác định'}
+        </p>
+        <p>
+          Dashboard giám sát hiện chỉ hỗ trợ ADMIN.
+          Các vai trò khác sẽ được mở khi Backend
+          hoàn thiện phân quyền và phạm vi thiết bị.
+        </p>
+        <button type="button" onClick={onLogout}>
+          Đăng xuất
+        </button>
+      </section>
+    </main>
+  )
+}
+
 function AppRouter() {
   const [authData, setAuthData] = useState(null)
   const [checkingSession, setCheckingSession] = useState(true)
 
   useEffect(() => {
-    let isMounted = true
+    let active = true
 
-    const checkSession = async () => {
+    async function checkSession() {
       const token = sessionStorage.getItem(TOKEN_KEY)
 
       if (!token) {
-        if (isMounted) setCheckingSession(false)
+        sessionStorage.removeItem(USER_KEY)
+        if (active) {
+          setAuthData(null)
+          setCheckingSession(false)
+        }
         return
       }
 
       try {
+        const user = await getCurrentUser(token)
 
-      const cachedUser = JSON.parse(
-        sessionStorage.getItem(USER_KEY) || '{}'
-      )
+        if (!active) return
 
-      const currentUser = await getCurrentUser(token)
+        sessionStorage.setItem(USER_KEY, JSON.stringify(user))
+        setAuthData({ accessToken: token, user })
+      } catch (error) {
+        console.error('Lỗi xác thực phiên:', error)
 
-      if (isMounted) {
-        setAuthData({
-          accessToken: token,
-          user: {
-            ...cachedUser,
-            ...currentUser,
-          },
-        })
-      }
-
-      } catch {
         sessionStorage.removeItem(TOKEN_KEY)
+        sessionStorage.removeItem(USER_KEY)
 
-        if (isMounted) {
-          setAuthData(null)
-        }
+        if (active) setAuthData(null)
       } finally {
-        if (isMounted) {
-          setCheckingSession(false)
-        }
+        if (active) setCheckingSession(false)
       }
     }
 
     checkSession()
 
     return () => {
-      isMounted = false
+      active = false
     }
   }, [])
 
-  const handleLogin = (data) => {
+  function handleLogin(data) {
+    if (!data?.accessToken || !data?.user) return
+
     sessionStorage.setItem(TOKEN_KEY, data.accessToken)
     sessionStorage.setItem(USER_KEY, JSON.stringify(data.user))
-    setAuthData(data)
+
+    setAuthData({
+      accessToken: data.accessToken,
+      user: data.user,
+    })
   }
 
-  const handleLogout = () => {
+  function handleLogout() {
     sessionStorage.removeItem(TOKEN_KEY)
     sessionStorage.removeItem(USER_KEY)
     setAuthData(null)
@@ -74,9 +120,14 @@ function AppRouter() {
 
   if (checkingSession) {
     return (
-      <div style={{ padding: 24, color: '#fff', background: '#0b1220', minHeight: '100vh' }}>
-        Đang kiểm tra phiên đăng nhập...
-      </div>
+      <main style={{
+        minHeight: '100vh',
+        background: '#0b1220',
+        color: 'white',
+        padding: 24,
+      }}>
+        Đang xác thực phiên đăng nhập...
+      </main>
     )
   }
 
@@ -84,7 +135,23 @@ function AppRouter() {
     return <Login onLogin={handleLogin} />
   }
 
-  return <App onLogout={handleLogout} user={authData.user} />
+  const role = normalizeRole(authData.user?.role)
+
+  if (role !== 'ADMIN') {
+    return (
+      <AccessDenied
+        user={authData.user}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
+  return (
+    <App
+      user={authData.user}
+      onLogout={handleLogout}
+    />
+  )
 }
 
 export default AppRouter

@@ -10,7 +10,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import jakarta.validation.ConstraintViolationException;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -72,6 +73,42 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    /**
+     * Xử lý lỗi tham số đầu vào không hợp lệ.
+     * HTTP 400 Bad Request.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(
+            IllegalArgumentException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        "success", false,
+                        "message", ex.getMessage() != null
+                        ? ex.getMessage()
+                                : "Tham số đầu vào không hợp lệ"
+                ));
+    }
+
+    /**
+     * Xử lý xung đột trạng thái nghiệp vụ.
+     * HTTP 409 Conflict.
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(
+            IllegalStateException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of(
+                        "success", false,
+                        "message", ex.getMessage() != null
+                                ? ex.getMessage()
+                                : "Xung đột trạng thái nghiệp vụ"
+                ));
+    }
+
     // 4. Xu ly cac loi he thong khong mong muon
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleUnexpected(
@@ -87,4 +124,47 @@ public class GlobalExceptionHandler {
                         "message", "Da xay ra loi he thong"
                 ));
     }
+
+
+    /**
+     * Xử lý lỗi validation tham số phương thức
+     * trong Spring MVC.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodValidation(
+            HandlerMethodValidationException ex
+    ) {
+        HttpStatus status = ex.isForReturnValue()
+                ? HttpStatus.INTERNAL_SERVER_ERROR
+                : HttpStatus.BAD_REQUEST;
+
+        if (ex.isForReturnValue()) {
+            log.error("Return value validation failed", ex);
+        }
+
+        return ResponseEntity
+                .status(status)
+                .body(Map.of(
+                        "success", false,
+                        "message", status == HttpStatus.BAD_REQUEST
+                                ? "Tham số API không hợp lệ"
+                                : "Đã xảy ra lỗi hệ thống"
+                ));
+    }
+
+    /**
+     * Xử lý lỗi Bean Validation.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConstraintViolation(
+            ConstraintViolationException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        "success", false,
+                        "message", "Dữ liệu đầu vào không hợp lệ"
+                ));
+    }
+
 }

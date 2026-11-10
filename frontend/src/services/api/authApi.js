@@ -1,5 +1,5 @@
 
-const API_BASE_URL = 'http://localhost:3000/api'
+const API_BASE_URL = 'http://localhost:8081/api/v1'
 
 export async function loginApi(username, password) {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -14,14 +14,17 @@ export async function loginApi(username, password) {
 
   if (!response.ok || result?.success !== true) {
     throw new Error(
-      result?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra tài khoản.',
+      result?.message ||
+        'Đăng nhập thất bại. Vui lòng kiểm tra tài khoản hoặc mật khẩu.',
     )
   }
 
   const data = result.data
 
   if (!data?.accessToken || !data?.user) {
-    throw new Error('Phản hồi đăng nhập từ máy chủ không hợp lệ.')
+    throw new Error(
+      'Phản hồi đăng nhập từ máy chủ không hợp lệ.',
+    )
   }
 
   return data
@@ -39,7 +42,8 @@ export async function getCurrentUser(token) {
 
   if (!response.ok || result?.success !== true) {
     throw new Error(
-      result?.message || 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+      result?.message ||
+        'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
     )
   }
 

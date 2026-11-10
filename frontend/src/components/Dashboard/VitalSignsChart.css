@@ -1,0 +1,8 @@
+.dg-vitals-panel{margin:20px 0;padding:22px;border:1px solid #273a54;border-radius:14px;background:#101d2e;color:#e9f1fc;min-width:0}
+.dg-vitals-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.dg-vitals-header h2{font-size:18px;margin:0 0 7px;font-weight:700}
+.dg-vitals-header p,.dg-vitals-footnote{color:#9eb5d3;font-size:12px;line-height:1.6;margin:6px 0}
+.dg-vitals-historical{color:#fbbf24;font-size:11px;font-weight:700;letter-spacing:.04em;border:1px solid #806122;background:#3b2b16;padding:7px 10px;border-radius:7px}
+.dg-vitals-chart{height:310px;min-width:0;width:100%}
+.dg-vitals-error{color:#fecaca;background:#4c1d26;padding:10px 12px;border-radius:8px}
+@media(max-width:600px){.dg-vitals-panel{padding:14px}.dg-vitals-chart{height:270px}}

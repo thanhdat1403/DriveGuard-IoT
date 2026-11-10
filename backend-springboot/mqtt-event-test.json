@@ -1,0 +1,8 @@
+{
+  "eventId": "esp32s3-demo-testboot-3",
+  "deviceId": "esp32s3-demo",
+  "eventType": "NO_RESPONSE_SOS",
+  "timestampMs": 75000,
+  "bootId": "testboot",
+  "sequence": 3
+}

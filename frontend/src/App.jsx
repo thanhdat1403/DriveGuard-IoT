@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import LiveMonitoringPanel from './components/Dashboard/LiveMonitoringPanel.jsx'
+import VitalSignsChart from './components/Dashboard/VitalSignsChart.jsx'
 import { generateSensorData } from './services/sensorSimulator'
 import { normalizeSensorData } from './services/sensorDataAdapter'
 import { connectMQTT, disconnectMqtt } from './services/mqttService'
@@ -547,6 +549,10 @@ function App({ user, onLogout }) {
                 : 'Dữ liệu đang mô phỏng'}
             </div>
           </div>
+
+          <LiveMonitoringPanel />
+
+          <VitalSignsChart />
 
           {/* Chọn tình huống mô phỏng */}
           <section className="scenario-panel">

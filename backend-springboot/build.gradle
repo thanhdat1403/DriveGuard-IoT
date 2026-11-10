@@ -24,6 +24,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
+    // MQTT Client - Eclipse Paho
+    implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
@@ -40,4 +44,56 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+tasks.register('generateTestPassword', JavaExec) {
+    group = 'verification'
+    description = 'Generate BCrypt hash for a temporary test account'
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.driveguard.backend.config.BCryptTestGenerator'
+
+    standardInput = System.in
+}
+
+
+/*
+ * DriveGuard IoT - Local Environment Configuration
+ *
+ * Load environment variables from .env.local
+ * for Gradle Test and JavaExec tasks.
+ */
+
+def localEnvFile = file(".env.local")
+def localEnv = [:]
+
+if (localEnvFile.exists()) {
+    localEnvFile.eachLine("UTF-8") { line ->
+        def trimmed = line.trim()
+
+        if (trimmed && !trimmed.startsWith("#")) {
+            int separator = trimmed.indexOf("=")
+
+            if (separator > 0) {
+                def key = trimmed.substring(0, separator).trim()
+                def value = trimmed.substring(separator + 1)
+
+                localEnv[key] = value
+            }
+        }
+    }
+}
+
+// Apply environment variables to unit/integration tests
+tasks.withType(Test).configureEach {
+    localEnv.each { key, value ->
+        environment key, (System.getenv(key) ?: value)
+    }
+}
+
+// Apply environment variables to bootRun and other JavaExec tasks
+tasks.withType(JavaExec).configureEach {
+    localEnv.each { key, value ->
+        environment key, (System.getenv(key) ?: value)
+    }
 }
