@@ -1,6 +1,8 @@
 
 package com.driveguard.backend.mqtt;
 
+import com.driveguard.backend.deviceevent.exception.DeviceNotFoundException;
+
 import com.driveguard.backend.device.service.DeviceService;
 import com.driveguard.backend.sensor.service.SensorReadingService;
 
@@ -9,6 +11,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.driveguard.backend.deviceevent.dto.mqtt.DeviceEventMessage;
 import com.driveguard.backend.deviceevent.service.DeviceEventService;
+import com.driveguard.backend.mqtt.service.MqttDeadLetterService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
@@ -16,14 +19,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.eclipse.paho.client.mqttv3.*;
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
 import org.springframework.stereotype.Service;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.UUID;
 
 /**
  * @Service: Đánh dấu đây là một Bean tầng Service quản lý bởi Spring Container.
@@ -31,7 +33,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@ConditionalOnProperty(
+@ConditionalOnProperty( // để bật hoặc tắt MQTT Subscriber
         prefix = "driveguard.mqtt",
         name = "enabled",
         havingValue = "true",
@@ -49,6 +51,9 @@ public class MqttSubscriberService {
     @Value("${driveguard.mqtt.events-topic}")
     private String mqttEventsTopic;
 
+    @Value("${driveguard.mqtt.client-id:driveguard-backend}")
+    private String mqttClientId;
+
 
     // Service xử lý nghiệp vụ thiết bị (Interface), Spring inject DeviceServiceImpl
     private final DeviceService deviceService;
@@ -59,12 +64,13 @@ public class MqttSubscriberService {
 
     // Service tiếp nhận, xác thực và lưu sự kiện ESP32-S3.
     private final DeviceEventService deviceEventService;
+    private final MqttDeadLetterService mqttDeadLetterService;
 
     // ObjectMapper dùng để chuyển đổi dữ liệu JSON từ MQTT thành đối tượng Java
     private final ObjectMapper objectMapper;
 
     // Đối tượng Client của thư viện Paho MQTT dùng để kết nối và tương tác với Broker
-    private MqttClient mqttClient;
+    private MqttAsyncClient mqttClient;
 
     /**
      * @PostConstruct: Định nghĩa hàm này sẽ TỰ ĐỘNG CHẠY ngay sau khi
@@ -76,14 +82,22 @@ public class MqttSubscriberService {
             // Tạo một Client ID ngẫu nhiên bằng UUID để tránh bị trùng lặp trên Broker
             // (Nếu 2 client trùng ID kết nối vào Broker, cái cũ sẽ bị ngắt kết nối)
 
-            String clientId = "driveguard-springboot-" + UUID.randomUUID();
+            String clientId = mqttClientId;
 
             // Lưu trạng thái MQTT trong RAM, không tạo thư mục persistence.
-            mqttClient = new MqttClient(
+            // V9.4.9: Lưu trạng thái MQTT Client xuống ổ đĩa.
+            // Đường dẫn này cần được duy trì qua các lần khởi động Backend.
+            String persistenceDirectory = "./mqtt-persistence";
+
+            mqttClient = new MqttAsyncClient(
                     mqttBroker,
                     clientId,
-                    new MemoryPersistence()
+                    new MqttDefaultFilePersistence(persistenceDirectory)
             );
+
+            // V9.4.9: Cho phép Backend chủ động xác nhận bản tin MQTT.
+            // Không tự động ACK khi callback messageArrived() kết thúc.
+            mqttClient.setManualAcks(true);
 
             // Cấu hình các tùy chọn khi kết nối
             // Cấu hình MQTT
@@ -93,7 +107,7 @@ public class MqttSubscriberService {
             options.setAutomaticReconnect(true);
 
             // Không duy trì phiên MQTT cũ
-            options.setCleanSession(true);
+            options.setCleanSession(false);
 
             // Thời gian chờ thiết lập kết nối
             options.setConnectionTimeout(10);
@@ -124,7 +138,32 @@ public class MqttSubscriberService {
                                 1
                         };
 
-                        mqttClient.subscribe(topics, qos);
+                        // V9.4.9.4: Subscribe bất đồng bộ.
+                        // Không dùng waitForCompletion() bên trong MQTT callback.
+                        mqttClient.subscribe(
+                                topics,
+                                qos,
+                                null,
+                                new IMqttActionListener() {
+
+                                    @Override
+                                    public void onSuccess(IMqttToken token) {
+                                        log.info(
+                                                "[MQTT] Subscribe thanh cong | telemetry={} | events={}",
+                                                mqttTelemetryTopic,
+                                                mqttEventsTopic
+                                        );
+                                    }
+
+                                    @Override
+                                    public void onFailure(IMqttToken token, Throwable exception) {
+                                        log.error(
+                                                "[MQTT] Subscribe that bai",
+                                                exception
+                                        );
+                                    }
+                                }
+                        );
 
                         log.info(
                                 "[MQTT] {} broker thanh cong: {}",
@@ -170,7 +209,7 @@ public class MqttSubscriberService {
                 public void messageArrived(
                         String topic,
                         MqttMessage message
-                ) {
+                ) throws Exception {
                     log.info("[MQTT DEBUG] messageArrived() duoc goi!");
                     log.info("[MQTT DEBUG] Topic = {}", topic);
                     log.info("[MQTT DEBUG] Payload = {}", message.toString());
@@ -184,7 +223,82 @@ public class MqttSubscriberService {
                     // Phân luồng theo MQTT topic trước khi xử lý JSON.
 
                     if (mqttEventsTopic.equals(topic)) {
-                        handleEventMessage(payload);
+
+                        try {
+
+                            // Chỉ ACK sau khi saveEvent() hoàn tất thành công.
+                            handleEventMessage(payload);
+
+                            if (message.getQos() > 0) {
+
+                                mqttClient.messageArrivedComplete(
+                                        message.getId(),
+                                        message.getQos()
+                                );
+
+                                log.info(
+                                        "[MQTT-ACK] Event acknowledged | messageId={} | qos={}",
+                                        message.getId(),
+                                        message.getQos()
+                                );
+                            }
+
+                        } catch (DeviceNotFoundException e) {
+                            Long deadLetterId = mqttDeadLetterService.saveInvalidMessage(
+                                    topic,
+                                    message.getPayload(),
+                                    "DEVICE_NOT_FOUND",
+                                    e.getMessage()
+                            );
+
+                            if (message.getQos() > 0) {
+                                mqttClient.messageArrivedComplete(
+                                        message.getId(),
+                                        message.getQos()
+                                );
+                            }
+
+                            log.warn(
+                                    "[MQTT-DLQ] Unknown device stored and ACKed | dlqId={} | messageId={}",
+                                    deadLetterId,
+                                    message.getId()
+                            );
+
+                        } catch (InvalidMqttEventException e) {
+                            mqttDeadLetterService.saveInvalidMessage(
+                                    topic,
+                                    message.getPayload(),
+                                    "INVALID_JSON_SYNTAX",
+                                    e.getMessage()
+                            );
+
+                            if (message.getQos() > 0) {
+                                mqttClient.messageArrivedComplete(
+                                        message.getId(),
+                                        message.getQos()
+                                );
+                            }
+
+                            log.warn(
+                                    "[MQTT-DLQ] Invalid JSON stored and ACKed | messageId={}",
+                                    message.getId()
+                            );
+
+                        } catch (Exception e) {
+
+                            log.error(
+                                    "[MQTT-ACK] Event processing failed | messageId={} | qos={} | topic={}",
+                                    message.getId(),
+                                    message.getQos(),
+                                    topic,
+                                    e
+                            );
+
+                            // Không ACK khi xử lý thất bại.
+                            // Chuyển ngoại lệ cho Paho xử lý trạng thái kết nối.
+                            throw e;
+                        }
+
                         return;
                     }
 
@@ -342,7 +456,17 @@ public class MqttSubscriberService {
             });
 
             // Tiến hành gửi lệnh kết nối thực tế tới MQTT Broker
-            mqttClient.connect(options);
+            // V9.4.9.4: Kết nối bằng MqttAsyncClient.
+            IMqttToken connectToken = mqttClient.connect(options);
+
+            // Chờ hoàn thành kết nối ban đầu.
+            // Lệnh này nằm trong @PostConstruct, không nằm trong MQTT callback.
+            connectToken.waitForCompletion(15000);
+
+            log.info(
+                    "[MQTT] Ket noi ban dau thanh cong | clientId={}",
+                    mqttClientId
+            );
 
             // Đăng ký (Subscribe) lắng nghe vào Topic cụ thể với mức độ chất lượng dịch vụ QoS = 0
             // Đã chuyển thao tác subscribe vào connectComplete()
@@ -395,6 +519,14 @@ public class MqttSubscriberService {
      * đồng thời chuyển các sự kiện SOS đến AlertService
      * để tạo, xác nhận hoặc kết thúc đợt SOS.
      */
+
+    private static class InvalidMqttEventException
+            extends IllegalArgumentException {
+
+        private InvalidMqttEventException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
     private void handleEventMessage(String payload) {
 
         try {
@@ -402,17 +534,26 @@ public class MqttSubscriberService {
             if (payload.getBytes(StandardCharsets.UTF_8).length
                     > 16 * 1024) {
 
-                log.warn("[MQTT-EVENT] Payload exceeds 16 KB");
-                return;
+                throw new IllegalArgumentException(
+                        "MQTT event payload exceeds 16 KB"
+                );
             }
 
-            JsonNode json = objectMapper.readTree(payload);
+            JsonNode json;
+            try {
+                json = objectMapper.readTree(payload);
+            } catch (tools.jackson.core.JacksonException e) {
+                throw new InvalidMqttEventException(
+                        "Invalid MQTT event JSON syntax",
+                        e
+                );
+            }
 
             if (json == null || !json.isObject()) {
-                log.warn(
-                        "[MQTT-EVENT] Payload must be a JSON Object"
+
+                throw new IllegalArgumentException(
+                        "MQTT event payload must be a JSON Object"
                 );
-                return;
             }
 
             DeviceEventMessage event = new DeviceEventMessage();
@@ -472,10 +613,21 @@ public class MqttSubscriberService {
                     e.getMessage()
             );
 
+            // V9.4.9: Giữ lại thông tin lỗi để tầng MQTT
+            // có thể quyết định chính sách xử lý bản tin.
+            throw e;
+
         } catch (Exception e) {
 
             log.error(
                     "[MQTT-EVENT] Failed to process event",
+                    e
+            );
+
+            // V9.4.9: Không được coi lỗi database
+            // là một lần xử lý MQTT thành công.
+            throw new IllegalStateException(
+                    "Failed to process MQTT event",
                     e
             );
         }
@@ -561,25 +713,43 @@ public class MqttSubscriberService {
      */
     @PreDestroy
     public void disconnect() {
-        // Nếu chưa từng khởi tạo client thì không làm gì cả
+
         if (mqttClient == null) {
             return;
         }
 
         try {
-            // Nếu đang kết nối thì ngắt kết nối một cách an toàn (ngắt lịch sử với Broker)
+
             if (mqttClient.isConnected()) {
-                mqttClient.disconnect();
+
+                // V9.4.9.5: Ngắt kết nối MQTT bất đồng bộ.
+                IMqttToken disconnectToken = mqttClient.disconnect();
+
+                // Chờ ngắt kết nối hoàn tất.
+                disconnectToken.waitForCompletion(10000);
+
+                log.info("[MQTT] Disconnect thanh cong");
             }
 
-            // Đóng hẳn client để giải phóng bộ nhớ RAM và tài nguyên hệ thống
-            mqttClient.close();
-
-            log.info("[MQTT] Da ngat ket noi an toan.");
-
         } catch (MqttException e) {
-            // In ra lỗi nếu quá trình ngắt kết nối gặp trục trặc
-            log.error("[MQTT] Loi ngat ket noi: {}", e.getMessage(), e);
+
+            log.error(
+                    "[MQTT] Loi khi disconnect MQTT",
+                    e
+            );
+
+        } finally {
+
+            try {
+                mqttClient.close();
+                log.info("[MQTT] Da dong MQTT Client");
+
+            } catch (MqttException e) {
+                log.error(
+                        "[MQTT] Loi khi dong MQTT Client",
+                        e
+                );
+            }
         }
     }
 }

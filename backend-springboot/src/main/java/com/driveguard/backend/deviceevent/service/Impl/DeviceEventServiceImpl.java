@@ -2,6 +2,7 @@ package com.driveguard.backend.deviceevent.service.Impl;
 
 import com.driveguard.backend.device.entity.DeviceEntity;
 import com.driveguard.backend.device.repository.DeviceRepository;
+import com.driveguard.backend.deviceevent.exception.DeviceNotFoundException;
 import com.driveguard.backend.deviceevent.dto.mqtt.DeviceEventMessage;
 import com.driveguard.backend.deviceevent.entity.DeviceEventEntity;
 import com.driveguard.backend.deviceevent.repository.DeviceEventRepository;
@@ -63,9 +64,7 @@ public class DeviceEventServiceImpl implements DeviceEventService {
         DeviceEntity device = deviceRepository
                 .findByDeviceCodeForUpdate(deviceCode)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Device not found: " + deviceCode
-                        )
+                        new DeviceNotFoundException(deviceCode)
                 );
 
         // 4. Kiểm tra trùng eventId SAU KHI lấy khóa.
