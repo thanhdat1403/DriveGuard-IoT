@@ -268,3 +268,5 @@ CREATE TABLE `users` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
+
+CREATE TABLE mqtt_dead_letters (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, source_topic VARCHAR(255) NOT NULL, payload_hash VARCHAR(64) NOT NULL, raw_payload LONGBLOB NOT NULL, error_code VARCHAR(80) NOT NULL, error_message VARCHAR(500) NULL, received_at DATETIME(6) NOT NULL, created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), PRIMARY KEY (id), INDEX idx_mqtt_dlq_received (received_at), INDEX idx_mqtt_dlq_error_received (error_code, received_at), INDEX idx_mqtt_dlq_payload_hash (payload_hash));
