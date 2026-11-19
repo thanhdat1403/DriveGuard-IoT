@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
 /**
  * @Slf4j: Tự động tạo biến 'log' của thư viện Lombok để ghi nhật ký hệ thống chuyên nghiệp.
@@ -53,7 +54,7 @@ public class DeviceServiceImpl implements DeviceService {
         // Thực hiện câu lệnh SELECT tìm thiết bị theo 'deviceCode'.
         // Nếu không tìm thấy bất kỳ bản ghi nào trùng khớp -> ném ra lỗi thông báo.
         DeviceEntity device = deviceRepository
-                .findByDeviceCode(deviceCode)
+                .findByDeviceCodeForUpdate(deviceCode.trim())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Khong tim thay thiet bi: " + deviceCode
                 ));
@@ -86,5 +87,86 @@ public class DeviceServiceImpl implements DeviceService {
                 device.getId()
         );
 
+    }
+
+    /**
+     * Chuyen cac thiet bi ONLINE da qua han Heartbeat
+     * sang OFFLINE.
+     *
+     * cutoffTime phai duoc tinh theo UTC.
+     *
+     * @return So thiet bi thuc su duoc chuyen OFFLINE.
+     */
+    @Override
+    @Transactional
+    public int markExpiredDevicesOffline(LocalDateTime cutoffTime) {
+
+        // Bước 1: Kiểm tra đầu vào
+        if (cutoffTime == null){
+            throw new IllegalArgumentException(
+                    "cutoffTime khong duoc null"
+            );
+        }
+
+        // Bước 2: Tìm các thiết bị có Heartbeat quá hạn
+        List<DeviceEntity> expiredDevices =
+                deviceRepository.findDevicesWithExpiredHeartbeat(
+                        DeviceEntity.DeviceStatus.ONLINE,
+                        cutoffTime
+                );
+
+        int offlineCount = 0;
+
+        // Bước 3: Xử lý từng thiết bị
+        for (DeviceEntity candidate : expiredDevices) {
+
+            // Khóa bản ghi để tránh xung đột với MQTT
+            DeviceEntity device = deviceRepository
+                    .findByIdForUpdate(candidate.getId())
+                    .orElse(null);
+
+            if (device == null){
+                continue;
+            }
+
+            // Bước 4: Kiểm tra lại trạng thái sau khi khóa
+            if (device.getStatus() != DeviceEntity.DeviceStatus.ONLINE){
+                continue;
+            }
+
+            LocalDateTime lastSeenAt = device.getLastSeenAt();
+
+            // Chỉ chuyển OFFLINE nếu chưa từng có Heartbeat
+            // hoặc Heartbeat cu hon cutoffTime
+            boolean expired = lastSeenAt == null
+                    || lastSeenAt.isBefore(cutoffTime);
+
+            if (!expired){
+                continue;
+            }
+
+            // Bước 5: Chuyển sang OFFLINE
+            device.setStatus(DeviceEntity.DeviceStatus.OFFLINE);
+
+            deviceRepository.save(device);
+
+            offlineCount++;
+
+            log.warn(
+                    "[HEARTBEAT] Device OFFLINE | deviceCode={} | lastSeenAt={} | cutoffTime={}",
+                    device.getDeviceCode(),
+                    lastSeenAt,
+                    cutoffTime
+            );
+        }
+
+        // Bước 6: Ghi log tổng kết
+        if (offlineCount > 0){
+            log.info(
+                    "[HEARTBEAT] Tong so thiet bi chuyen OFFLINE: {}",
+                    offlineCount
+            );
+        }
+        return offlineCount;
     }
 }

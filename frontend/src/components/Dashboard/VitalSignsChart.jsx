@@ -4,8 +4,8 @@ import { getSensorReadingHistory } from '../../services/api/sensorReadingApi.js'
 import { normalizeHistoryPage } from '../../services/liveSensorAdapter.js'
 import './VitalSignsChart.css'
 
-const DEVICE_ID = 1
-const PAGE_SIZE = 100
+const DEVICE_ID = 2
+const PAGE_SIZE = 20
 const REFRESH_MS = 15000
 
 function displayTime(value) {

@@ -1,0 +1,5 @@
+﻿mediapipe==1.2.3
+opencv-contrib-python==5.0.0.93
+numpy==2.5.4
+paho-mqtt==2.2.0
+pytest==9.2.0

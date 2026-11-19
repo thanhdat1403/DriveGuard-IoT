@@ -270,3 +270,62 @@ CREATE TABLE `users` (
 /*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
 
 CREATE TABLE mqtt_dead_letters (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, source_topic VARCHAR(255) NOT NULL, payload_hash VARCHAR(64) NOT NULL, raw_payload LONGBLOB NOT NULL, error_code VARCHAR(80) NOT NULL, error_message VARCHAR(500) NULL, received_at DATETIME(6) NOT NULL, created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), PRIMARY KEY (id), INDEX idx_mqtt_dlq_received (received_at), INDEX idx_mqtt_dlq_error_received (error_code, received_at), INDEX idx_mqtt_dlq_payload_hash (payload_hash));
+
+-- ==================================================
+-- DRIVEGUARD GPS - TESTCONTAINERS SCHEMA
+-- Source: database/migrations/V001__create_device_locations.sql
+-- ==================================================
+
+-- DriveGuard GPS location history.
+-- Execute only against the verified E2E database first.
+-- All DATETIME values are stored in UTC.
+
+CREATE TABLE device_locations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    device_id BIGINT UNSIGNED NOT NULL,
+    message_id VARCHAR(100) NOT NULL,
+
+    latitude DECIMAL(10,7) NOT NULL,
+    longitude DECIMAL(10,7) NOT NULL,
+
+    accuracy_m DECIMAL(8,2) NULL,
+    speed_kmh DECIMAL(8,2) NULL,
+    heading_deg DECIMAL(6,2) NULL,
+
+    measured_at DATETIME(3) NOT NULL,
+    received_at DATETIME(3) NOT NULL,
+    created_at DATETIME(3) NOT NULL
+        DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (id),
+
+    UNIQUE KEY uk_locations_device_message
+        (device_id, message_id),
+
+    KEY idx_locations_device_measured
+        (device_id, measured_at, id),
+
+    CONSTRAINT fk_locations_device
+        FOREIGN KEY (device_id)
+        REFERENCES devices(id),
+
+    CONSTRAINT chk_locations_latitude
+        CHECK (latitude BETWEEN -90 AND 90),
+
+    CONSTRAINT chk_locations_longitude
+        CHECK (longitude BETWEEN -180 AND 180),
+
+    CONSTRAINT chk_locations_accuracy
+        CHECK (accuracy_m IS NULL OR accuracy_m >= 0),
+
+    CONSTRAINT chk_locations_speed
+        CHECK (speed_kmh IS NULL OR speed_kmh >= 0),
+
+    CONSTRAINT chk_locations_heading
+        CHECK (
+            heading_deg IS NULL OR
+            (heading_deg >= 0 AND heading_deg < 360)
+        )
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;

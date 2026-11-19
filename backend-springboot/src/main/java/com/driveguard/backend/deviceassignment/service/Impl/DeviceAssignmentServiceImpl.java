@@ -11,6 +11,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
 import jakarta.persistence.EntityManager;
+
+import com.driveguard.backend.trip.enums.TripStatus;
+import com.driveguard.backend.trip.repository.TripRepository;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.ZoneOffset;
@@ -27,6 +31,9 @@ public class DeviceAssignmentServiceImpl
     private final DeviceRepository deviceRepository;
     private final DriverRepository driverRepository;
     private final EntityManager entityManager;
+
+    private final TripRepository tripRepository;
+
 
     //Phân công thiết bị cho tài xế.
     @Override
@@ -168,6 +175,16 @@ public class DeviceAssignmentServiceImpl
             );
         }
 
+
+        // Không kết thúc Assignment khi còn chuyến đang chạy.
+        if (tripRepository.existsByAssignment_IdAndStatus(
+                assignmentId, TripStatus.IN_PROGRESS)) {
+            throw new IllegalStateException(
+                    "Không thể kết thúc phân công khi chuyến đi đang chạy"
+            );
+        }
+
+
         validateTimeRange(
                 assignment.getStartedAt(),
                 endedAt
@@ -175,11 +192,29 @@ public class DeviceAssignmentServiceImpl
 
         // endedAt đã được Controller chuyển sang UTC.
         // Vì vậy thời gian hiện tại cũng phải sử dụng UTC.
+
         if (endedAt.isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
             throw new IllegalArgumentException(
                     "Thời điểm kết thúc thực tế không được ở tương lai"
             );
         }
+
+        // Không cho kết thúc Assignment trước hoặc trong Trip đã ghi nhận.
+        long invalidTrips =
+                tripRepository.countTripsOutsideAssignmentEnd(
+                        assignmentId,
+                        endedAt
+                );
+
+        if (invalidTrips > 0) {
+            throw new IllegalStateException(
+                    "Không thể kết thúc phân công tại thời điểm này "
+                            + "vì có chuyến đi nằm ngoài khoảng thời gian phân công"
+            );
+        }
+
+        assignment.setEndedAt(endedAt);
+
 
         assignment.setEndedAt(endedAt);
 

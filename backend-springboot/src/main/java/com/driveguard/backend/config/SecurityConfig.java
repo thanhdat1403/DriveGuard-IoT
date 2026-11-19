@@ -74,6 +74,28 @@ public class SecurityConfig {
                                 "/api/v1/admin/**"
                         ).hasRole("ADMIN")
 
+
+                        // =====================================
+                        // GPS Location REST APIs - ADMIN only
+                        // =====================================
+
+                        // Lấy vị trí GPS mới nhất của thiết bị.
+                        // GET /api/v1/devices/{deviceId}/locations/latest
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/devices/*/locations/latest"
+                        ).hasRole("ADMIN")
+
+                        // Lấy lịch sử GPS có phân trang.
+                        // GET /api/v1/devices/{deviceId}/locations
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/devices/*/locations"
+                        ).hasRole("ADMIN")
+
+
                         // Sensor Reading APIs - ADMIN only
                         // Chỉ cho phép ADMIN đọc dữ liệu cảm biến.
                         // Các API này yêu cầu JWT hợp lệ có role ADMIN.
@@ -200,9 +222,36 @@ public class SecurityConfig {
                         ).hasRole("ADMIN")
 
 
-                        // Mặc định từ chối API chưa cấp quyền
-                        .anyRequest().denyAll()
+                        // Device Events REST API - ADMIN only.
+                        // Chỉ cho phép đọc lịch sử và chi tiết sự kiện.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/device-events",
+                                "/api/v1/device-events/**"
+                        ).hasRole("ADMIN")
 
+
+                        // Trip Management - ADMIN only.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/trips",
+                                "/api/v1/trips/**"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/trips/start"
+                        ).hasRole("ADMIN")
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/trips/*/complete",
+                                "/api/v1/trips/*/cancel"
+                        ).hasRole("ADMIN")
+
+
+                        // Mặc định từ chối API chưa cấp quyền.
+                        .anyRequest().denyAll()
 
                 )
 

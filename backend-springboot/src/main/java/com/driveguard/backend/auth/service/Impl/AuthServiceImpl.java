@@ -28,7 +28,7 @@ public class AuthServiceImpl implements AuthService {
         String password = request.password();
 
         // 1. Tim tai khoan trong MariaDB
-        UserEntity user = userRepository.findByUsername(username)
+        UserEntity user = userRepository.findWithRoleByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED,
                         "Ten dang nhap hoac mat khau khong chinh xac"
@@ -89,7 +89,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse.UserInfo getCurrentUser(Long userId) {
 
-        UserEntity user = userRepository.findById(userId)
+        UserEntity user = userRepository.findWithRoleById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED,
                         "Tai khoan khong ton tai"

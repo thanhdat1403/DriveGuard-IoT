@@ -102,3 +102,5 @@ tasks.withType(JavaExec).configureEach {
         environment key, (System.getenv(key) ?: value)
     }
 }
+
+apply from: 'bcrypt-e2e.gradle'

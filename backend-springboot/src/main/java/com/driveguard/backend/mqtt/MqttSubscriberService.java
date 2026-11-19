@@ -27,6 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
+import com.driveguard.backend.location.mqtt.GpsTelemetryMessage;
+import com.driveguard.backend.location.mqtt.GpsTelemetryParser;
+import com.driveguard.backend.location.service.DeviceLocationService;
+
 /**
  * @Service: Đánh dấu đây là một Bean tầng Service quản lý bởi Spring Container.
  * Spring sẽ tự động phát hiện, khởi tạo và quản lý vòng đời của Class này.
@@ -65,6 +69,12 @@ public class MqttSubscriberService {
     // Service tiếp nhận, xác thực và lưu sự kiện ESP32-S3.
     private final DeviceEventService deviceEventService;
     private final MqttDeadLetterService mqttDeadLetterService;
+
+    // Phân tích và kiểm tra dữ liệu GPS từ MQTT JSON.
+    private final GpsTelemetryParser gpsTelemetryParser;
+
+    // Xác thực và lưu vị trí GPS vào bảng device_locations.
+    private final DeviceLocationService deviceLocationService;
 
     // ObjectMapper dùng để chuyển đổi dữ liệu JSON từ MQTT thành đối tượng Java
     private final ObjectMapper objectMapper;
@@ -134,8 +144,8 @@ public class MqttSubscriberService {
                         };
 
                         int[] qos = {
-                                0,
-                                1
+                                0, // telemetry
+                                1  // events
                         };
 
                         // V9.4.9.4: Subscribe bất đồng bộ.
@@ -264,8 +274,11 @@ public class MqttSubscriberService {
                                     message.getId()
                             );
 
+
                         } catch (InvalidMqttEventException e) {
-                            mqttDeadLetterService.saveInvalidMessage(
+
+                            // JSON sai cu phap: luu DLQ truoc khi ACK.
+                            Long deadLetterId = mqttDeadLetterService.saveInvalidMessage(
                                     topic,
                                     message.getPayload(),
                                     "INVALID_JSON_SYNTAX",
@@ -280,11 +293,37 @@ public class MqttSubscriberService {
                             }
 
                             log.warn(
-                                    "[MQTT-DLQ] Invalid JSON stored and ACKed | messageId={}",
+                                    "[MQTT-DLQ] Invalid JSON stored and ACKed | dlqId={} | messageId={}",
+                                    deadLetterId,
                                     message.getId()
                             );
 
+                        } catch (IllegalArgumentException e) {
+
+                            // Payload sai nghiep vu: luu DLQ truoc khi ACK.
+                            Long deadLetterId = mqttDeadLetterService.saveInvalidMessage(
+                                    topic,
+                                    message.getPayload(),
+                                    "INVALID_EVENT_DATA",
+                                    e.getMessage()
+                            );
+
+                            if (message.getQos() > 0) {
+                                mqttClient.messageArrivedComplete(
+                                        message.getId(),
+                                        message.getQos()
+                                );
+                            }
+
+                            log.warn(
+                                    "[MQTT-DLQ] Invalid event stored and ACKed | dlqId={} | messageId={} | reason={}",
+                                    deadLetterId,
+                                    message.getId(),
+                                    e.getMessage()
+                            );
+
                         } catch (Exception e) {
+
 
                             log.error(
                                     "[MQTT-ACK] Event processing failed | messageId={} | qos={} | topic={}",
@@ -367,6 +406,40 @@ public class MqttSubscriberService {
                                 deviceCode
                         );
 
+
+                        /*
+                         * XỬ LÝ GPS TỪ MQTT TELEMETRY
+                         *
+                         * Parser trả về Optional.empty() nếu bản tin
+                         * không chứa dữ liệu GPS.
+                         */
+                        var gpsMessage = gpsTelemetryParser.parse(json);
+
+                        if (gpsMessage.isPresent()) {
+
+                            GpsTelemetryMessage gps = gpsMessage.get();
+
+                            // Service kiểm tra nghiệp vụ và chống trùng messageId.
+                            var savedLocation = deviceLocationService.saveLocation(
+                                    gps.deviceCode(),
+                                    gps.messageId(),
+                                    gps.latitude(),
+                                    gps.longitude(),
+                                    gps.accuracyM(),
+                                    gps.speedKmh(),
+                                    gps.headingDeg(),
+                                    gps.measuredAt()
+                            );
+
+                            log.info(
+                                    "[GPS] Processed | locationId={} | device={} | messageId={}",
+                                    savedLocation.getId(),
+                                    gps.deviceCode(),
+                                    gps.messageId()
+                            );
+                        }
+
+
                         // ==============================================
                         // BƯỚC MỚI: XỬ LÝ DỮ LIỆU CẢM BIẾN TỪ MQTT
                         // ==============================================
@@ -384,13 +457,24 @@ public class MqttSubscriberService {
                                         || (edgeAiStatusNode != null && !edgeAiStatusNode.isNull())
                                         || (isDrowsyNode != null && !isDrowsyNode.isNull());
 
+
                         if (!hasSensorData) {
-                            log.info(
-                                    "[SENSOR] Ban tin chi cap nhat trang thai thiet bi: {}",
-                                    deviceCode
-                            );
+
+                            if (gpsMessage.isPresent()) {
+                                log.info(
+                                        "[MQTT] GPS-only processed | device={}",
+                                        deviceCode
+                                );
+                            } else {
+                                log.info(
+                                        "[MQTT] Status-only processed | device={}",
+                                        deviceCode
+                                );
+                            }
+
                             return;
                         }
+
 
                         // Chuyển giá trị cảm biến thành BigDecimal.
                         // Nếu trường không có hoặc là JSON null thì trả về null.

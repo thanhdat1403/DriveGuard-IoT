@@ -3,7 +3,7 @@ import { getLatestSensorReading } from '../../services/api/sensorReadingApi.js'
 import { normalizeLiveReading, getMonitoringStatus } from '../../services/liveSensorAdapter.js'
 import './LiveMonitoringPanel.css'
 
-const DEVICE_ID = 1 // Chỉ dùng cho Dashboard ADMIN thử nghiệm
+const DEVICE_ID = 2 // Thiết bị kiểm thử trong MariaDB E2E
 const POLL_MS = 5000
 
 const showNumber = (value, suffix = '') =>
@@ -11,7 +11,7 @@ const showNumber = (value, suffix = '') =>
 
 export default function LiveMonitoringPanel() {
   const [raw, setRaw] = useState(null)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -50,7 +50,10 @@ export default function LiveMonitoringPanel() {
     }
   }, [])
 
-  const reading = normalizeLiveReading(raw, { now })
+  const reading = now === null
+  ? null
+  : normalizeLiveReading(raw, { now })
+
   const status = getMonitoringStatus(reading)
   const usable = Boolean(reading?.isFresh && !error)
   const cards = [

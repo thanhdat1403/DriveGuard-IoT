@@ -1,0 +1,217 @@
+
+.dg-gps-panel {
+  padding: 28px;
+  background: #101e30;
+  border: 1px solid #293e57;
+  border-radius: 20px;
+  color: #edf5ff;
+  min-width: 0;
+}
+
+.dg-gps-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dg-gps-eyebrow {
+  color: #56d6d0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.dg-gps-heading h2 {
+  margin: 10px 0;
+  font-size: 24px;
+}
+
+.dg-gps-heading p,
+.dg-gps-footer {
+  color: #a4bbd5;
+  font-size: 13px;
+}
+
+.dg-gps-badge {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #493719;
+  color: #ffd17a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dg-gps-map {
+  height: 420px;
+  overflow: hidden;
+  border: 1px solid #34516d;
+  border-radius: 14px;
+}
+
+.dg-gps-map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.dg-gps-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.dg-gps-stats article {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  background: #192b42;
+  border: 1px solid #304761;
+  border-radius: 12px;
+}
+
+.dg-gps-stats span {
+  color: #a4bbd5;
+  font-size: 13px;
+}
+
+.dg-gps-stats strong {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.dg-gps-footer {
+  margin-top: 20px;
+  line-height: 1.6;
+}
+
+.dg-gps-footer p {
+  margin: 6px 0;
+}
+
+.dg-gps-error {
+  padding: 12px;
+  color: #ffc1c1;
+  background: #48252b;
+  border-radius: 8px;
+}
+
+.dg-gps-empty {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  border: 1px dashed #425c78;
+  border-radius: 14px;
+  color: #a4bbd5;
+}
+
+@media (max-width: 850px) {
+  .dg-gps-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .dg-gps-panel {
+    padding: 16px;
+  }
+
+  .dg-gps-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dg-gps-map {
+    height: 320px;
+  }
+}
+
+
+/* Các thao tác điều khiển GPS. */
+.dg-gps-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dg-gps-button {
+  padding: 10px 14px;
+  border: 1px solid #45627e;
+  border-radius: 10px;
+  background: #1b334c;
+  color: #edf5ff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.dg-gps-button:hover:not(:disabled) {
+  background: #284c6d;
+}
+
+.dg-gps-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dg-gps-button:focus-visible {
+  outline: 2px solid #56d6d0;
+  outline-offset: 3px;
+}
+
+.dg-gps-status-live {
+  background: #164c3e;
+  color: #79f0bf;
+}
+
+.dg-gps-status-stale {
+  background: #493719;
+  color: #ffd17a;
+}
+
+.dg-gps-status-unknown {
+  background: #35445b;
+  color: #d1deed;
+}
+
+@media (max-width: 520px) {
+  .dg-gps-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+
+/* Marker ô tô trên bản đồ Leaflet. */
+.dg-car-marker {
+  background: transparent;
+  border: none;
+}
+
+.dg-car-marker-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.88);
+  border: 2px solid #38bdf8;
+  box-shadow:
+    0 3px 12px rgba(0, 0, 0, 0.35),
+    0 0 0 4px rgba(56, 189, 248, 0.12);
+}
+
+.dg-car-marker-rotator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  transform-origin: center center;
+}

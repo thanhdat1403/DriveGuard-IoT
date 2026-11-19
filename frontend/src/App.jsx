@@ -5,6 +5,7 @@ import VitalSignsChart from './components/Dashboard/VitalSignsChart.jsx'
 import { generateSensorData } from './services/sensorSimulator'
 import { normalizeSensorData } from './services/sensorDataAdapter'
 import { connectMQTT, disconnectMqtt } from './services/mqttService'
+import GpsTracking from './components/GPS/GpsTracking.jsx'
 import {
   recordSensorEvent,
   getEventHistory,
@@ -553,6 +554,8 @@ function App({ user, onLogout }) {
           <LiveMonitoringPanel />
 
           <VitalSignsChart />
+
+          <GpsTracking />
 
           {/* Chọn tình huống mô phỏng */}
           <section className="scenario-panel">

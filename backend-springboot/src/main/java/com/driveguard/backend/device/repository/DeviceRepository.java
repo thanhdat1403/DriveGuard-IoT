@@ -8,7 +8,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -40,5 +41,26 @@ public interface DeviceRepository
         """)
     Optional<DeviceEntity> findByDeviceCodeForUpdate(
             @Param("deviceCode") String deviceCode
+    );
+
+    /**
+     * Tim cac thiet bi dang ONLINE
+     * nhung da qua thoi gian Heartbeat.
+     *
+     * cutoffTime duoc tinh theo UTC.
+     */
+    @Query("""
+    SELECT d
+    FROM DeviceEntity d
+    WHERE d.status = :status
+      AND (
+          d.lastSeenAt IS NULL
+          OR d.lastSeenAt < :cutoffTime
+      )
+    ORDER BY d.id ASC
+    """)
+    List<DeviceEntity> findDevicesWithExpiredHeartbeat(
+            @Param("status") DeviceEntity.DeviceStatus status,
+            @Param("cutoffTime") LocalDateTime cutoffTime
     );
 }

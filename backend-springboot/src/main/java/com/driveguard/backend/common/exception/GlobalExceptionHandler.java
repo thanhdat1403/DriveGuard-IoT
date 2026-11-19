@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -108,6 +110,34 @@ public class GlobalExceptionHandler {
                                 : "Xung đột trạng thái nghiệp vụ"
                 ));
     }
+
+
+    // Thiếu tham số bắt buộc trên URL.
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingRequestParameter(
+            MissingServletRequestParameterException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        "success", false,
+                        "message", "Thieu tham so bat buoc: " + ex.getParameterName()
+                ));
+    }
+
+    // Tham số URL không chuyển đổi được sang kiểu dữ liệu yêu cầu.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of(
+                        "success", false,
+                        "message", "Tham so khong hop le: " + ex.getName()
+                ));
+    }
+
 
     // 4. Xu ly cac loi he thong khong mong muon
     @ExceptionHandler(Exception.class)
